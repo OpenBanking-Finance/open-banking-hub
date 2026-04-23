@@ -1,0 +1,40 @@
+{
+  "realm": "openbanking",
+  "enabled": true,
+  "displayName": "Open Banking Hub",
+  "clients": [
+    {
+      "clientId": "hub-client",
+      "name": "Open Banking Hub Client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "hub-secret-123",
+      "redirectUris": [
+        "http://127.0.0.1:3000/login/callback",
+        "http://localhost:3000/login/callback"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "joao",
+      "enabled": true,
+      "email": "joao@Open Banking.com",
+      "firstName": "Joao",
+      "lastName": "Silva",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "123",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
