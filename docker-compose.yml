@@ -27,5 +27,23 @@ services:
     depends_on:
       - postgres
 
+  hub:
+    build: .
+    container_name: openbanking_api_hub
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_NAME=${DB_NAME:-open_banking_hub}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - SESSION_SECRET=${SESSION_SECRET:-uma-chave-secreta-muito-longa-e-segura-aqui}
+      - PORT=3000
+    depends_on:
+      - postgres
+      - keycloak
+    command: sh -c "npx knex migrate:latest --knexfile knexfile.cjs && npm start"
+
 volumes:
   postgres_data:
