@@ -5,8 +5,8 @@
 export const up = function(knex) {
   return knex.schema.table('consents', (table) => {
     table.string('bank_id').nullable();
-    table.string('access_token').nullable();
-    table.string('refresh_token').nullable();
+    table.text('access_token').nullable();
+    table.text('refresh_token').nullable();
     table.string('bank_user_id').nullable();
   })
 };
