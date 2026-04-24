@@ -19,7 +19,9 @@ const __dirname = path.dirname(__filename)
 
 // Load environment variables from the local directory (one level up from src/)
 const envPath = path.resolve(__dirname, '../.env');
-dotenv.config({ path: envPath });
+if (!process.env.DB_HOST) {
+  dotenv.config({ path: envPath });
+}
 
 const app = Fastify({ 
   logger: true,

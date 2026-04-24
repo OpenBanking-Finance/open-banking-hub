@@ -12,6 +12,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-open_banking_hub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   keycloak:
     image: quay.io/keycloak/keycloak:23.0
@@ -25,7 +30,8 @@ services:
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm.json
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   hub:
     build: .
@@ -41,8 +47,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-uma-chave-secreta-muito-longa-e-segura-aqui}
       - PORT=3000
     depends_on:
-      - postgres
-      - keycloak
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
     command: sh -c "npx knex migrate:latest --knexfile knexfile.cjs && npm start"
 
 volumes:
