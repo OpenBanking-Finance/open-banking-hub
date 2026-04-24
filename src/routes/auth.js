@@ -2,7 +2,7 @@ export default async function authRoutes(app) {
   // CAUSA B: Ensuring session is persisted before redirecting to Keycloak
   app.get('/login', async (request, reply) => {
     try {
-      // Geração Manual da URL (À prova de falhas de versão de plugin)
+      
       const state = Math.random().toString(36).substring(7);
       const clientId = process.env.KC_CLIENT_ID || 'hub-client';
       const realm = process.env.KC_REALM || 'openbanking';
@@ -11,14 +11,14 @@ export default async function authRoutes(app) {
       
       const keycloakUrl = `http://127.0.0.1:8080/realms/${realm}/protocol/openid-connect/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
       
-      console.log('>>> [HUB] Redirecionando MANUALMENTE para Keycloak:', keycloakUrl);
+      console.log('>>> [HUB] Redirecting MANUALLY to Keycloak:', keycloakUrl);
       
       request.session.oauth_state = state
       await request.session.save()
       
       return reply.redirect(keycloakUrl)
     } catch (err) {
-      console.error('>>> [HUB ERROR] Falha no login manual:', err.message);
+      console.error('>>> [HUB ERROR] Manual login failed:', err.message);
       return reply.status(500).send({ error: 'Auth generation failed' });
     }
   })
@@ -53,8 +53,7 @@ export default async function authRoutes(app) {
       request.session.token = token.access_token
       await request.session.save()
 
-      // REDIRECIONAR DE VOLTA PARA O PORTAL (FINTECH APP)
-      // Ajuste para o endereço onde você roda o seu portal
+      
       return reply.redirect('http://localhost:5000/') 
     } catch (err) {
       request.log.error(err, 'Authentication failed during token exchange')
@@ -70,12 +69,12 @@ export default async function authRoutes(app) {
       return reply.status(401).send({ authenticated: false, error: 'Unauthorized' })
     }
 
-    // Em um fluxo real, decodificaríamos o JWT do token para pegar o nome
+    
     return { 
       authenticated: true,
       user: {
-        name: 'João Silva', // Mockado para simplificar, mas vindo da sessão
-        email: 'joao@fintech.com'
+        name: '',
+        email: ''
       }
     }
   })

@@ -12,23 +12,25 @@ export const up = function(knex) {
     table.string('status').defaultTo('active');
     table.timestamps(true, true);
   }).then(() => {
-    // Seed default banks with their specific URLs
-    return knex('banks').insert([
-      { 
-        id: 'alpha-bank-001', 
-        name: 'MockBank Alpha', 
-        authorise_url: 'http://127.0.0.1:3001/consents/authorise',
-        api_url: 'http://127.0.0.1:3001',
-        status: 'active'
-      },
-      { 
-        id: 'beta-bank-002', 
-        name: 'MockBank Beta', 
-        authorise_url: 'http://127.0.0.1:3002/consents/authorise',
-        api_url: 'http://127.0.0.1:3002',
-        status: 'active'
-      }
-    ]);
+    // Only seed default banks if SEED_DEMO_DATA is true
+    if (process.env.SEED_DEMO_DATA === 'true') {
+      return knex('banks').insert([
+        { 
+          id: 'alpha-bank-001', 
+          name: 'MockBank Alpha', 
+          authorise_url: 'http://127.0.0.1:3001/consents/authorise',
+          api_url: 'http://127.0.0.1:3001',
+          status: 'active'
+        },
+        { 
+          id: 'beta-bank-002', 
+          name: 'MockBank Beta', 
+          authorise_url: 'http://127.0.0.1:3002/consents/authorise',
+          api_url: 'http://127.0.0.1:3002',
+          status: 'active'
+        }
+      ]);
+    }
   });
 };
 

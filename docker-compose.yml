@@ -44,7 +44,7 @@ services:
       - DB_PASS=${DB_PASS:-postgres}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - SESSION_SECRET=${SESSION_SECRET:-uma-chave-secreta-muito-longa-e-segura-aqui}
+      - SESSION_SECRET=${SESSION_SECRET:-a-very-long-and-secure-session-secret-key-here}
       - PORT=3000
     depends_on:
       postgres:
