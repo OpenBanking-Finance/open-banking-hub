@@ -63,14 +63,18 @@ export default async function consentRoutes(app) {
 
     try {
       // 1. Fetch consent to identify the target bank
+      console.log(`HUB: Callback received for consentId: ${consentId}`);
       const consent = await consentService.getConsentById(consentId)
-      if (!consent) return reply.status(404).send({ error: 'Consent not found' })
+      if (!consent) {
+        console.error(`HUB: Consent ${consentId} not found in database!`);
+        return reply.status(404).send({ error: 'Consent not found' })
+      }
 
       // 2. EXCHANGE CODE FOR TOKEN
       const bank = await db('banks').where({ id: consent.bank_id }).first()
       const bankUrl = bank?.api_url || 'http://127.0.0.1:3001'
       
-      request.log.info({ consentId, code }, 'Starting code exchange for token at the bank')
+      console.log(`HUB: Exchanging code ${code} for token at bank: ${bankUrl}`);
 
       const tokenResponse = await axios.post(`${bankUrl}/token`, {
         code,
@@ -79,6 +83,7 @@ export default async function consentRoutes(app) {
       })
 
       const { access_token, refresh_token, bank_user_id } = tokenResponse.data
+      console.log(`HUB: Token exchange success for consent ${consentId}. Token: ${access_token ? 'OK' : 'MISSING'}`);
 
       // 3. Persist tokens and update status to AUTHORISED
       await consentService.updateAuthorizedConsent(consentId, {
@@ -88,12 +93,15 @@ export default async function consentRoutes(app) {
         bank_user_id
       })
 
+      console.log(`HUB: Consent ${consentId} updated to AUTHORISED in DB.`);
+
       // 4. Redirect user back to the Fintech Portal (App)
       const portalUrl = 'http://127.0.0.1:5000/'; 
+      console.log(`HUB: Redirecting user to app: ${portalUrl}?consentId=${consentId}`);
       return reply.redirect(`${portalUrl}?consentId=${consentId}`)
       
     } catch (err) {
-      request.log.error(err, 'Token exchange failed')
+      console.error(`HUB: Error in callback for ${consentId}:`, err.message);
       return reply.status(502).send({ 
         error: "Bank communication failure", 
         message: err.message 
