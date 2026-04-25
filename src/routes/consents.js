@@ -29,7 +29,8 @@ export default async function consentRoutes(app) {
       })
       
       // Use the official authorise_url from the Directory
-      const authorisationUri = `${bank.authorise_url}?consentId=${consent.id}&redirect_uri=http://127.0.0.1:3000/consents/callback`
+      const hubUrl = process.env.HUB_PUBLIC_URL || 'http://127.0.0.1:3000';
+      const authorisationUri = `${bank.authorise_url}?consentId=${consent.id}&redirect_uri=${hubUrl}/consents/callback`
       
       request.log.info({ consentId: consent.id, bank: bank.name }, 'New consent request created via Directory')
       
@@ -96,7 +97,7 @@ export default async function consentRoutes(app) {
       console.log(`HUB: Consent ${consentId} updated to AUTHORISED in DB.`);
 
       // 4. Redirect user back to the Fintech Portal (App)
-      const portalUrl = 'http://127.0.0.1:5000/'; 
+      const portalUrl = process.env.APP_PORTAL_URL || 'http://127.0.0.1:5000/'; 
       console.log(`HUB: Redirecting user to app: ${portalUrl}?consentId=${consentId}`);
       return reply.redirect(`${portalUrl}?consentId=${consentId}`)
       

@@ -55,13 +55,13 @@ app.register(oauth2, {
       secret: process.env.KC_CLIENT_SECRET || 'hub-secret-123'
     },
     auth: {
-      authorizeHost: 'http://127.0.0.1:8080',
+      authorizeHost: process.env.KC_URL || 'http://127.0.0.1:8080',
       authorizePath: `/realms/${process.env.KC_REALM || 'openbanking'}/protocol/openid-connect/auth`,
-      tokenHost: 'http://127.0.0.1:8080',
+      tokenHost: process.env.KC_URL || 'http://127.0.0.1:8080',
       tokenPath: `/realms/${process.env.KC_REALM || 'openbanking'}/protocol/openid-connect/token`
     }
   },
-  callbackUri: 'http://127.0.0.1:3000/login/callback'
+  callbackUri: `${process.env.HUB_PUBLIC_URL || 'http://127.0.0.1:3000'}/login/callback`
 })
 
 // Register Routes
