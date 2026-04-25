@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.js'
 import consentRoutes from './routes/consents.js'
 import bankingRoutes from './routes/banking.js'
 import adminRoutes from './routes/admin.js'
+import transferRoutes from './routes/transfers.js'
 
 // Resolve __dirname for ESM
 const __filename = fileURLToPath(import.meta.url)
@@ -23,14 +24,14 @@ if (!process.env.DB_HOST) {
   dotenv.config({ path: envPath });
 }
 
-const app = Fastify({ 
+const app = Fastify({
   logger: true,
-  trustProxy: true 
+  trustProxy: true
 })
 
 // Register core plugins
 app.register(cookie)
-app.register(cors, { 
+app.register(cors, {
   origin: true, // In production, replace with specific domain
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
@@ -40,7 +41,7 @@ app.register(session, {
   cookie: {
     secure: false, // Localhost dev
     sameSite: 'lax', // Easier for dev across local ports
-    httpOnly: true 
+    httpOnly: true
   },
   saveUninitialized: false
 })
@@ -55,13 +56,13 @@ app.register(oauth2, {
       secret: process.env.KC_CLIENT_SECRET || 'hub-secret-123'
     },
     auth: {
-      authorizeHost: process.env.KC_URL || 'http://127.0.0.1:8080',
+      authorizeHost: 'http://127.0.0.1:8080',
       authorizePath: `/realms/${process.env.KC_REALM || 'openbanking'}/protocol/openid-connect/auth`,
-      tokenHost: process.env.KC_URL || 'http://127.0.0.1:8080',
+      tokenHost: 'http://127.0.0.1:8080',
       tokenPath: `/realms/${process.env.KC_REALM || 'openbanking'}/protocol/openid-connect/token`
     }
   },
-  callbackUri: `${process.env.HUB_PUBLIC_URL || 'http://127.0.0.1:3000'}/login/callback`
+  callbackUri: 'http://127.0.0.1:3000/login/callback'
 })
 
 // Register Routes
@@ -69,6 +70,7 @@ app.register(authRoutes);
 app.register(consentRoutes);
 app.register(bankingRoutes);
 app.register(adminRoutes);
+app.register(transferRoutes);
 
 // Health check endpoint
 app.get('/health', async () => ({

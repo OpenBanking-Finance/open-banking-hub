@@ -13,25 +13,21 @@ export default async function bankingRoutes(app) {
   // GET /accounts
   app.get('/accounts', async (request, reply) => {
     const { consentId } = request.query
-    
+
     if (!consentId) return reply.status(400).send({ error: 'consentId is required' })
 
     try {
       const consent = await consentService.getConsentById(consentId)
-      console.log(`HUB: Fetching accounts for consent ${consentId}. Status in DB: ${consent?.status}`);
-      
       if (!consent || !consent.access_token) {
-        console.error(`HUB: Access denied for ${consentId}. Token missing: ${!consent?.access_token}`);
         return reply.status(403).send({ error: 'Unauthorised', message: 'No valid access token found' })
       }
 
       const bankUrl = await getBankApiUrl(consent)
-      console.log(`HUB: Calling bank API at: ${bankUrl}/accounts`);
 
       const response = await axios.get(`${bankUrl}/accounts`, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${consent.access_token}`,
-          'X-Consent-ID': consentId 
+          'X-Consent-ID': consentId
         }
       })
       return response.data
