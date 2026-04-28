@@ -27,7 +27,8 @@ export default async function bankingRoutes(app) {
       const response = await axios.get(`${bankUrl}/accounts`, {
         headers: {
           'Authorization': `Bearer ${consent.access_token}`,
-          'X-Consent-ID': consentId
+          'X-Consent-ID': consentId,
+          'X-User-ID': consent.bank_user_id
         }
       })
       return response.data
