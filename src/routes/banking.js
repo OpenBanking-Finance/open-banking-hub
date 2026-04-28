@@ -24,6 +24,8 @@ export default async function bankingRoutes(app) {
 
       const bankUrl = await getBankApiUrl(consent)
 
+      request.log.info({ bankUrl, bank_user_id: consent.bank_user_id }, 'Calling bank /accounts')
+
       const response = await axios.get(`${bankUrl}/accounts`, {
         headers: {
           'Authorization': `Bearer ${consent.access_token}`,
@@ -49,7 +51,10 @@ export default async function bankingRoutes(app) {
       const bankUrl = await getBankApiUrl(consent)
 
       const response = await axios.get(`${bankUrl}/accounts/${accountId}/transactions`, {
-        headers: { 'Authorization': `Bearer ${consent.access_token}` }
+        headers: {
+          'Authorization': `Bearer ${consent.access_token}`,
+          'X-User-ID': consent.bank_user_id
+        }
       })
       return response.data
     } catch (err) {
