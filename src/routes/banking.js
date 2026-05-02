@@ -4,10 +4,26 @@ import consentService from '../services/consentService.js'
 
 export default async function bankingRoutes(app) {
 
-  // Middleware-like function to resolve bank API URL from Directory
   const getBankApiUrl = async (consent) => {
     const bank = await db('banks').where({ id: consent.bank_id }).first()
     return bank?.api_url || 'http://127.0.0.1:3001'
+  }
+
+  // Returns the permissions the USER actually granted (falls back to what the fintech requested
+  // if the bank adapter didn't return granted_permissions — e.g. mock-bank)
+  const getEffectivePermissions = (consent) => {
+    try {
+      const granted = typeof consent.granted_permissions === 'string'
+        ? JSON.parse(consent.granted_permissions)
+        : consent.granted_permissions
+      if (Array.isArray(granted) && granted.length > 0) return granted
+    } catch { /* ignore */ }
+    try {
+      const requested = typeof consent.permissions === 'string'
+        ? JSON.parse(consent.permissions)
+        : consent.permissions
+      return Array.isArray(requested) ? requested : []
+    } catch { return [] }
   }
 
   // GET /accounts
@@ -22,6 +38,10 @@ export default async function bankingRoutes(app) {
         return reply.status(403).send({ error: 'Unauthorised', message: 'No valid access token found' })
       }
 
+      if (!getEffectivePermissions(consent).includes('ACCOUNTS_READ')) {
+        return reply.status(403).send({ error: 'Forbidden', message: 'ACCOUNTS_READ permission not granted' })
+      }
+
       const bankUrl = await getBankApiUrl(consent)
 
       request.log.info({ bankUrl, bank_user_id: consent.bank_user_id }, 'Calling bank /accounts')
@@ -33,7 +53,25 @@ export default async function bankingRoutes(app) {
           'X-User-ID': consent.bank_user_id
         }
       })
-      return response.data
+
+      const data = response.data
+
+      // Filter to only accounts the user selected during consent authorisation
+      const selectedAccounts = (() => {
+        if (!consent.selected_accounts) return null
+        try {
+          const parsed = typeof consent.selected_accounts === 'string'
+            ? JSON.parse(consent.selected_accounts)
+            : consent.selected_accounts
+          return Array.isArray(parsed) && parsed.length > 0 ? parsed : null
+        } catch { return null }
+      })()
+
+      if (selectedAccounts && Array.isArray(data.accounts)) {
+        data.accounts = data.accounts.filter(acc => selectedAccounts.includes(acc.id))
+      }
+
+      return data
     } catch (err) {
       return reply.status(err.response?.status || 502).send(err.response?.data || { error: 'Bank communication error' })
     }
@@ -47,6 +85,10 @@ export default async function bankingRoutes(app) {
     try {
       const consent = await consentService.getConsentById(consentId)
       if (!consent || !consent.access_token) return reply.status(403).send({ error: 'Unauthorised' })
+
+      if (!getEffectivePermissions(consent).includes('TRANSACTIONS_READ')) {
+        return reply.status(403).send({ error: 'Forbidden', message: 'TRANSACTIONS_READ permission not granted' })
+      }
 
       const bankUrl = await getBankApiUrl(consent)
 

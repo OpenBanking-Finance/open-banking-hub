@@ -30,7 +30,8 @@ export default async function consentRoutes(app) {
 
       // Use the official authorise_url from the Directory
       const hubUrl = process.env.HUB_PUBLIC_URL || 'http://127.0.0.1:3000'
-      const authorisationUri = `${bank.authorise_url}?consentId=${consent.id}&redirect_uri=${hubUrl}/consents/callback`
+      const encodedPerms = encodeURIComponent(JSON.stringify(permissions || []))
+      const authorisationUri = `${bank.authorise_url}?consentId=${consent.id}&redirect_uri=${hubUrl}/consents/callback&permissions=${encodedPerms}`
 
       request.log.info({ consentId: consent.id, bank: bank.name }, 'New consent request created via Directory')
 
@@ -79,14 +80,16 @@ export default async function consentRoutes(app) {
         client_secret: 'super_secret_hub_key'
       })
 
-      const { access_token, refresh_token, bank_user_id } = tokenResponse.data
+      const { access_token, refresh_token, bank_user_id, selected_accounts, granted_permissions } = tokenResponse.data
 
       // 3. Persist tokens and update status to AUTHORISED
       await consentService.updateAuthorizedConsent(consentId, {
         status: 'AUTHORISED',
         access_token,
         refresh_token,
-        bank_user_id
+        bank_user_id,
+        selected_accounts: selected_accounts || [],
+        granted_permissions: granted_permissions || []
       })
 
       // 4. Redirect user back to the Fintech Portal (App)
@@ -117,6 +120,26 @@ export default async function consentRoutes(app) {
       return consent
     } catch (err) {
       request.log.error(err, 'Failed to fetch consent')
+      return reply.status(500).send({ error: 'Internal Server Error' })
+    }
+  })
+
+  // Revoke consent
+  // DELETE /consents/:consentId
+  app.delete('/consents/:consentId', async (request, reply) => {
+    const { consentId } = request.params
+
+    try {
+      const consent = await consentService.revokeConsent(consentId)
+
+      if (!consent) {
+        return reply.status(404).send({ error: 'Consent not found or already revoked/rejected' })
+      }
+
+      request.log.info({ consentId }, 'Consent revoked')
+      return reply.status(200).send({ id: consentId, status: 'REVOKED' })
+    } catch (err) {
+      request.log.error(err, 'Failed to revoke consent')
       return reply.status(500).send({ error: 'Internal Server Error' })
     }
   })

@@ -181,11 +181,32 @@ Returns the current state of a consent.
   "status": "AUTHORISED",
   "bank_id": "alpha-bank-001",
   "permissions": ["ACCOUNTS_READ", "TRANSACTIONS_READ", "PAYMENTS_WRITE"],
+  "granted_permissions": ["ACCOUNTS_READ", "TRANSACTIONS_READ"],
+  "selected_accounts": ["acc-alpha-001"],
   "bank_user_id": "joao",
   "created_at": "2026-04-28T12:00:00.000Z",
   "updated_at": "2026-04-28T12:01:00.000Z"
 }
 ```
+
+`granted_permissions` — what the user actually selected during consent (may be a subset of `permissions`). The Hub enforces these when proxying resource requests.
+
+`selected_accounts` — account IDs the user chose to share. `GET /accounts` returns only these accounts.
+
+---
+
+#### `DELETE /consents/:consentId`
+
+Revokes an active consent. Only consents in `AWAITING_AUTHORISATION` or `AUTHORISED` status can be revoked.
+
+**Response `200`**
+```json
+{ "id": "e8a90abf-...", "status": "REVOKED" }
+```
+
+| Status | Reason |
+|---|---|
+| `404` | Consent not found or already revoked/rejected |
 
 ---
 
@@ -193,7 +214,7 @@ Returns the current state of a consent.
 
 #### `GET /accounts?consentId=<id>`
 
-Fetches accounts from the bank using the stored access token.
+Fetches accounts from the bank. Requires `ACCOUNTS_READ` in the user's granted permissions. If the user selected specific accounts during consent, only those accounts are returned.
 
 **Query params**
 | Param | Required | Description |
@@ -209,16 +230,19 @@ Headers:
   X-User-ID:     <bank_user_id>
 ```
 
-**Response `200`** (proxied from bank)
+**Response `200`** (filtered to `selected_accounts`)
 ```json
 {
   "accounts": [
     {
       "id": "acc-alpha-001",
-      "accountName": "Conta Corrente",
-      "accountType": "SAVINGS",
+      "accountName": "Checking Account",
+      "accountType": "CURRENT",
       "balance": 5420.50,
-      "currency": "CVE"
+      "currency": "CVE",
+      "msisdn": "23000000010",
+      "partyType": "CONSUMER",
+      "businessId": null
     }
   ],
   "bank": "MockBank Alpha"
@@ -228,14 +252,14 @@ Headers:
 | Status | Reason |
 |---|---|
 | `400` | Missing `consentId` |
-| `403` | Consent not authorised or token missing |
+| `403` | Consent not authorised, token missing, or `ACCOUNTS_READ` not granted |
 | `502` | Bank communication failure |
 
 ---
 
 #### `GET /accounts/:accountId/transactions?consentId=<id>`
 
-Fetches transaction history for an account.
+Fetches transaction history for an account. Requires `TRANSACTIONS_READ` in the user's granted permissions.
 
 **Internal request the Hub makes to the bank:**
 ```
@@ -267,6 +291,8 @@ Requires `PAYMENTS_WRITE` in the consent permissions.
 
 #### `POST /transfers` — Step 1: Initiate
 
+Requires `PAYMENTS_WRITE` in the user's **granted** permissions.
+
 **Request body**
 ```json
 {
@@ -275,9 +301,14 @@ Requires `PAYMENTS_WRITE` in the consent permissions.
   "currency": "CVE",
   "debtorAccount": "acc-alpha-001",
   "creditorAccount": "acc-beta-002",
-  "creditorName": "Maria Souza"
+  "creditorName": "Maria Souza",
+  "creditorIdType": "MSISDN"
 }
 ```
+
+| Field | Required | Description |
+|---|---|---|
+| `creditorIdType` | no | Oracle type for the recipient: `MSISDN` (default), `ACCOUNT_ID`, or `BUSINESS` |
 
 **Internal request to bank:**
 ```
@@ -387,7 +418,9 @@ INITIATED → PARTY_CONFIRMED → COMPLETED
 | `user_id` | string | Keycloak user sub |
 | `bank_id` | string FK | Associated bank |
 | `status` | enum | `AWAITING_AUTHORISATION` / `AUTHORISED` / `REJECTED` / `REVOKED` |
-| `permissions` | jsonb | Array of permission strings |
+| `permissions` | jsonb | Permissions requested by the fintech |
+| `granted_permissions` | jsonb | Permissions actually granted by the user (subset of `permissions`) |
+| `selected_accounts` | jsonb | Account IDs the user chose to share |
 | `access_token` | text | Token from the bank |
 | `refresh_token` | text | Refresh token from the bank |
 | `bank_user_id` | string | User ID in the bank's own system |

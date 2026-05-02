@@ -10,9 +10,9 @@ export default async function transferRoutes(app) {
     return bank?.api_url
   }
 
-  // PASSO 1 - Iniciar Transferência
+  // Step 1 — Initiate Transfer
   app.post('/transfers', async (request, reply) => {
-    const { consentId, amount, currency, debtorAccount, creditorAccount, creditorName } = request.body
+    const { consentId, amount, currency, debtorAccount, creditorAccount, creditorName, creditorIdType } = request.body
 
     if (!consentId) return reply.status(400).send({ error: 'consentId is required' })
 
@@ -22,12 +22,24 @@ export default async function transferRoutes(app) {
         return reply.status(403).send({ error: 'Unauthorised', message: 'Consent not authorised' })
       }
 
-      const permissions = JSON.parse(consent.permissions || '[]')
-      if (!permissions.includes('PAYMENTS_WRITE')) {
-        return reply.status(403).send({ error: 'Forbidden', message: 'Missing PAYMENTS_WRITE permission' })
+      // Check against what the USER granted, falling back to what the fintech requested
+      const effectivePermissions = (() => {
+        try {
+          const granted = typeof consent.granted_permissions === 'string'
+            ? JSON.parse(consent.granted_permissions)
+            : consent.granted_permissions
+          if (Array.isArray(granted) && granted.length > 0) return granted
+        } catch { /* ignore */ }
+        try {
+          return JSON.parse(consent.permissions || '[]')
+        } catch { return [] }
+      })()
+
+      if (!effectivePermissions.includes('PAYMENTS_WRITE')) {
+        return reply.status(403).send({ error: 'Forbidden', message: 'PAYMENTS_WRITE permission not granted' })
       }
 
-      // Regista transferência no Hub
+      // Record transfer in Hub DB
       const transfer = await transferService.createTransfer({
         consent_id: consentId,
         bank_id: consent.bank_id,
@@ -40,18 +52,19 @@ export default async function transferRoutes(app) {
 
       const bankUrl = await getBankApiUrl(consent.bank_id)
 
-      // Chama SDK Bank
+      // Forward to bank adapter
       const response = await axios.post(`${bankUrl}/transfers`, {
         amount,
         currency,
         debtorAccount,
         creditorAccount,
-        creditorName
+        creditorName,
+        toAccountType: creditorIdType || 'MSISDN'
       }, {
         headers: { 'Authorization': `Bearer ${consent.access_token}` }
       })
 
-      // Actualiza com dados do Mojaloop
+      // Update with Mojaloop tracking data
       const updatedTransfer = await transferService.updateTransfer(transfer.id, {
         mojaloop_transfer_id: response.data.mojaloopTransferId,
         party_info: response.data.partyInfo
@@ -64,7 +77,7 @@ export default async function transferRoutes(app) {
     }
   })
 
-  // PASSO 2 - Confirmar Destinatário (Obter Cotação)
+  // Step 2 — Confirm Recipient (Get Quote)
   app.put('/transfers/:id/confirm-party', async (request, reply) => {
     const { id } = request.params
 
@@ -93,7 +106,7 @@ export default async function transferRoutes(app) {
     }
   })
 
-  // PASSO 3 - Confirmar Cotação e Executar
+  // Step 3 — Confirm Quote and Execute
   app.put('/transfers/:id/confirm-quote', async (request, reply) => {
     const { id } = request.params
 
