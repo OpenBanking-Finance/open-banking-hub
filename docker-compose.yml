@@ -1,9 +1,15 @@
 version: '3.8'
 
+networks:
+  hub_net:
+    driver: bridge
+
 services:
+
   postgres:
     image: postgres:15-alpine
-    container_name: openbanking_db
+    container_name: hub_postgres
+    networks: [hub_net]
     environment:
       POSTGRES_DB: ${DB_NAME:-open_banking_hub}
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -13,14 +19,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-open_banking_hub}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   keycloak:
     image: quay.io/keycloak/keycloak:23.0
-    container_name: openbanking_keycloak
+    container_name: hub_keycloak
+    networks: [hub_net]
     command: start-dev --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -29,23 +36,27 @@ services:
       - "8080:8080"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm.json
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   hub:
     build: .
-    container_name: openbanking_api_hub
+    container_name: hub_api
+    networks: [hub_net]
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     environment:
-      - DB_NAME=${DB_NAME:-open_banking_hub}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASS=${DB_PASS:-postgres}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - SESSION_SECRET=${SESSION_SECRET:-a-very-long-and-secure-session-secret-key-here}
-      - PORT=3000
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-open_banking_hub}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASS: ${DB_PASS:-postgres}
+      KC_URL: http://keycloak:8080
+      KC_REALM: ${KC_REALM:-openbanking}
+      KC_CLIENT_ID: ${KC_CLIENT_ID:-hub-client}
+      KC_CLIENT_SECRET: ${KC_CLIENT_SECRET:-hub-secret-123}
+      SESSION_SECRET: ${SESSION_SECRET:-a-very-long-and-secure-session-secret-key-here}
+      HUB_PUBLIC_URL: ${HUB_PUBLIC_URL:-http://localhost:3000}
+      APP_PORTAL_URL: ${APP_PORTAL_URL:-http://localhost:5000}
     depends_on:
       postgres:
         condition: service_healthy

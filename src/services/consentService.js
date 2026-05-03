@@ -24,21 +24,39 @@ class ConsentService {
   }
 
   /**
-   * Update consent status and tokens
+   * Update consent status and tokens after bank authorisation
    */
   async updateAuthorizedConsent(id, data) {
+    const update = {
+      status: data.status,
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      bank_user_id: data.bank_user_id,
+      updated_at: db.fn.now()
+    }
+
+    if (data.selected_accounts !== undefined) {
+      update.selected_accounts = JSON.stringify(data.selected_accounts)
+    }
+
+    if (data.granted_permissions !== undefined) {
+      update.granted_permissions = JSON.stringify(data.granted_permissions)
+    }
+
+    const [consent] = await db('consents').where({ id }).update(update).returning('*')
+    return consent
+  }
+
+  /**
+   * Revoke an active consent
+   */
+  async revokeConsent(id) {
     const [consent] = await db('consents')
       .where({ id })
-      .update({ 
-        status: data.status,
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        bank_user_id: data.bank_user_id,
-        updated_at: db.fn.now()
-      })
+      .whereIn('status', ['AWAITING_AUTHORISATION', 'AUTHORISED'])
+      .update({ status: 'REVOKED', updated_at: db.fn.now() })
       .returning('*')
-    
-    return consent
+    return consent || null
   }
 }
 

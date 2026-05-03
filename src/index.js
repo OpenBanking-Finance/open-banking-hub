@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.js'
 import consentRoutes from './routes/consents.js'
 import bankingRoutes from './routes/banking.js'
 import adminRoutes from './routes/admin.js'
+import transferRoutes from './routes/transfers.js'
 
 // Resolve __dirname for ESM
 const __filename = fileURLToPath(import.meta.url)
@@ -23,14 +24,14 @@ if (!process.env.DB_HOST) {
   dotenv.config({ path: envPath });
 }
 
-const app = Fastify({ 
+const app = Fastify({
   logger: true,
-  trustProxy: true 
+  trustProxy: true
 })
 
 // Register core plugins
 app.register(cookie)
-app.register(cors, { 
+app.register(cors, {
   origin: true, // In production, replace with specific domain
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
@@ -40,7 +41,7 @@ app.register(session, {
   cookie: {
     secure: false, // Localhost dev
     sameSite: 'lax', // Easier for dev across local ports
-    httpOnly: true 
+    httpOnly: true
   },
   saveUninitialized: false
 })
@@ -69,6 +70,7 @@ app.register(authRoutes);
 app.register(consentRoutes);
 app.register(bankingRoutes);
 app.register(adminRoutes);
+app.register(transferRoutes);
 
 // Health check endpoint
 app.get('/health', async () => ({

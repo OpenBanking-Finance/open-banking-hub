@@ -14,9 +14,9 @@ export default async function consentRoutes(app) {
     try {
       const body = request.body || {}
       const { permissions, expiration_date, bank_id } = body
-      
-      const userId = "dev-user-tester" 
-      
+
+      const userId = "dev-user-tester"
+
       // 1. RESOLVE BANK FROM DIRECTORY (DB)
       const bank = await db('banks').where({ id: bank_id || '3001' }).first()
       if (!bank) return reply.status(404).send({ error: 'Bank not found in directory' })
@@ -27,13 +27,14 @@ export default async function consentRoutes(app) {
         permissions: permissions || [],
         expiration_date: expiration_date
       })
-      
+
       // Use the official authorise_url from the Directory
-      const hubUrl = process.env.HUB_PUBLIC_URL || 'http://127.0.0.1:3000';
-      const authorisationUri = `${bank.authorise_url}?consentId=${consent.id}&redirect_uri=${hubUrl}/consents/callback`
-      
+      const hubUrl = process.env.HUB_PUBLIC_URL || 'http://127.0.0.1:3000'
+      const encodedPerms = encodeURIComponent(JSON.stringify(permissions || []))
+      const authorisationUri = `${bank.authorise_url}?consentId=${consent.id}&redirect_uri=${hubUrl}/consents/callback&permissions=${encodedPerms}`
+
       request.log.info({ consentId: consent.id, bank: bank.name }, 'New consent request created via Directory')
-      
+
       return reply.status(201).send({
         ...consent,
         redirect_url: authorisationUri
@@ -48,13 +49,13 @@ export default async function consentRoutes(app) {
   // GET /consents/callback
   app.get('/consents/callback', async (request, reply) => {
     const { consentId, code, status } = request.query
-    
+
     // Handle user rejection at the bank
     if (status === 'REJECTED') {
       await consentService.updateAuthorizedConsent(consentId, { status: 'REJECTED' })
-      return reply.send({ 
+      return reply.send({
         message: "Consent rejected by the user at the bank.",
-        status: "REJECTED" 
+        status: "REJECTED"
       })
     }
 
@@ -64,18 +65,14 @@ export default async function consentRoutes(app) {
 
     try {
       // 1. Fetch consent to identify the target bank
-      console.log(`HUB: Callback received for consentId: ${consentId}`);
       const consent = await consentService.getConsentById(consentId)
-      if (!consent) {
-        console.error(`HUB: Consent ${consentId} not found in database!`);
-        return reply.status(404).send({ error: 'Consent not found' })
-      }
+      if (!consent) return reply.status(404).send({ error: 'Consent not found' })
 
       // 2. EXCHANGE CODE FOR TOKEN
       const bank = await db('banks').where({ id: consent.bank_id }).first()
       const bankUrl = bank?.api_url || 'http://127.0.0.1:3001'
-      
-      console.log(`HUB: Exchanging code ${code} for token at bank: ${bankUrl}`);
+
+      request.log.info({ consentId, code }, 'Starting code exchange for token at the bank')
 
       const tokenResponse = await axios.post(`${bankUrl}/token`, {
         code,
@@ -83,29 +80,27 @@ export default async function consentRoutes(app) {
         client_secret: 'super_secret_hub_key'
       })
 
-      const { access_token, refresh_token, bank_user_id } = tokenResponse.data
-      console.log(`HUB: Token exchange success for consent ${consentId}. Token: ${access_token ? 'OK' : 'MISSING'}`);
+      const { access_token, refresh_token, bank_user_id, selected_accounts, granted_permissions } = tokenResponse.data
 
       // 3. Persist tokens and update status to AUTHORISED
       await consentService.updateAuthorizedConsent(consentId, {
         status: 'AUTHORISED',
         access_token,
         refresh_token,
-        bank_user_id
+        bank_user_id,
+        selected_accounts: selected_accounts || [],
+        granted_permissions: granted_permissions || []
       })
 
-      console.log(`HUB: Consent ${consentId} updated to AUTHORISED in DB.`);
-
       // 4. Redirect user back to the Fintech Portal (App)
-      const portalUrl = process.env.APP_PORTAL_URL || 'http://127.0.0.1:5000/'; 
-      console.log(`HUB: Redirecting user to app: ${portalUrl}?consentId=${consentId}`);
+      const portalUrl = process.env.APP_PORTAL_URL || 'http://127.0.0.1:5000/';
       return reply.redirect(`${portalUrl}?consentId=${consentId}`)
-      
+
     } catch (err) {
-      console.error(`HUB: Error in callback for ${consentId}:`, err.message);
-      return reply.status(502).send({ 
-        error: "Bank communication failure", 
-        message: err.message 
+      request.log.error(err, 'Token exchange failed')
+      return reply.status(502).send({
+        error: "Bank communication failure",
+        message: err.message
       })
     }
   })
@@ -114,17 +109,37 @@ export default async function consentRoutes(app) {
   // GET /consents/:consentId
   app.get('/consents/:consentId', async (request, reply) => {
     const { consentId } = request.params
-    
+
     try {
       const consent = await consentService.getConsentById(consentId)
-      
+
       if (!consent) {
         return reply.status(404).send({ error: 'Consent not found' })
       }
-      
+
       return consent
     } catch (err) {
       request.log.error(err, 'Failed to fetch consent')
+      return reply.status(500).send({ error: 'Internal Server Error' })
+    }
+  })
+
+  // Revoke consent
+  // DELETE /consents/:consentId
+  app.delete('/consents/:consentId', async (request, reply) => {
+    const { consentId } = request.params
+
+    try {
+      const consent = await consentService.revokeConsent(consentId)
+
+      if (!consent) {
+        return reply.status(404).send({ error: 'Consent not found or already revoked/rejected' })
+      }
+
+      request.log.info({ consentId }, 'Consent revoked')
+      return reply.status(200).send({ id: consentId, status: 'REVOKED' })
+    } catch (err) {
+      request.log.error(err, 'Failed to revoke consent')
       return reply.status(500).send({ error: 'Internal Server Error' })
     }
   })

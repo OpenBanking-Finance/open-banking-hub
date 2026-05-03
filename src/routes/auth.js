@@ -2,14 +2,16 @@ export default async function authRoutes(app) {
   // CAUSA B: Ensuring session is persisted before redirecting to Keycloak
   app.get('/login', async (request, reply) => {
     try {
-      
+
       const state = Math.random().toString(36).substring(7);
       const clientId = process.env.KC_CLIENT_ID || 'hub-client';
       const realm = process.env.KC_REALM || 'openbanking';
-      const redirectUri = encodeURIComponent('http://127.0.0.1:3000/login/callback');
+      const hubPublicUrl = process.env.HUB_PUBLIC_URL || 'http://127.0.0.1:3000';
+      const redirectUri = encodeURIComponent(`${hubPublicUrl}/login/callback`);
       const scope = encodeURIComponent('openid profile email');
-      
-      const keycloakUrl = `http://127.0.0.1:8080/realms/${realm}/protocol/openid-connect/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
+      const kcExternalUrl = process.env.KC_EXTERNAL_URL || 'http://127.0.0.1:8080';
+
+      const keycloakUrl = `${kcExternalUrl}/realms/${realm}/protocol/openid-connect/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
       
       console.log('>>> [HUB] Redirecting MANUALLY to Keycloak:', keycloakUrl);
       
@@ -54,7 +56,7 @@ export default async function authRoutes(app) {
       await request.session.save()
 
       
-      return reply.redirect('http://localhost:5000/') 
+      return reply.redirect(process.env.APP_PORTAL_URL || 'http://localhost:5000/')
     } catch (err) {
       request.log.error(err, 'Authentication failed during token exchange')
       return reply.status(500).send({ error: 'Authentication failed' })
@@ -83,7 +85,9 @@ export default async function authRoutes(app) {
   app.get('/logout', async (request, reply) => {
     request.session.destroy()
     
-    const logoutUrl = `${process.env.KEYCLOAK_EXTERNAL_URL}/realms/${process.env.KC_REALM}/protocol/openid-connect/logout?client_id=${process.env.KC_CLIENT_ID}&post_logout_redirect_uri=http://localhost:${process.env.PORT || 3000}/health`
+    const kcExternalUrl = process.env.KC_EXTERNAL_URL || 'http://127.0.0.1:8080';
+    const hubPublicUrl = process.env.HUB_PUBLIC_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
+    const logoutUrl = `${kcExternalUrl}/realms/${process.env.KC_REALM || 'openbanking'}/protocol/openid-connect/logout?client_id=${process.env.KC_CLIENT_ID || 'hub-client'}&post_logout_redirect_uri=${hubPublicUrl}/health`
     
     return reply.redirect(logoutUrl)
   })
